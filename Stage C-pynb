@@ -1,1 +1,156 @@
 
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+/usr/local/lib/python3.6/dist-packages/statsmodels/tools/_testing.py:19: FutureWarning: pandas.util.testing is deprecated. Use the functions in the public API at pandas.testing instead.
+  import pandas.util.testing as tm
+In [2]:
+#loading the dataset
+df = pd.read_csv('https://archive.ics.uci.edu/ml/machine-learning-databases/00471/Data_for_UCI_named.csv')
+In [3]:
+#dropping the 'stab' column as it will be represented by the 'stabf' column
+df.drop('stab', axis=1, inplace=True)
+In [4]:
+#preprocessing and vector/matrix slicing
+X, y = df.iloc[:, :-1], df.iloc[:, -1]
+In [5]:
+#train test split
+from sklearn.model_selection import train_test_split
+x_train, x_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=1)
+In [6]:
+#Standard scaler
+from sklearn.preprocessing import StandardScaler
+scaler = StandardScaler()
+normalized_train_df = scaler.fit_transform(x_train)
+normalized_train_df = pd.DataFrame(normalized_train_df, columns = x_train.columns)
+
+normalized_test_df = scaler.transform(x_test)
+normalized_test_df = pd.DataFrame(normalized_test_df, columns=x_test.columns)
+In [7]:
+#model selections
+from sklearn.ensemble import RandomForestClassifier
+forest = RandomForestClassifier(random_state=1)
+forest.fit(normalized_train_df, y_train)
+forest_pred = forest.predict(normalized_test_df)
+In [10]:
+from sklearn.metrics import classification_report
+print(classification_report(y_test, forest_pred, digits=4))
+              precision    recall  f1-score   support
+
+      stable     0.9191    0.8778    0.8980       712
+    unstable     0.9341    0.9573    0.9456      1288
+
+    accuracy                         0.9290      2000
+   macro avg     0.9266    0.9176    0.9218      2000
+weighted avg     0.9288    0.9290    0.9286      2000
+
+In [11]:
+#extra tree classifier
+from sklearn.ensemble import ExtraTreesClassifier
+tree = ExtraTreesClassifier(random_state=1)
+tree.fit(normalized_train_df, y_train)
+tree_pred = tree.predict(normalized_test_df)
+In [12]:
+#using the classifiation report for extra tree
+from sklearn.metrics import classification_report
+print(classification_report(y_test, tree_pred, zero_division=True, digits=6))
+              precision    recall  f1-score   support
+
+      stable   0.940994  0.851124  0.893805       712
+    unstable   0.921829  0.970497  0.945537      1288
+
+    accuracy                       0.928000      2000
+   macro avg   0.931411  0.910810  0.919671      2000
+weighted avg   0.928652  0.928000  0.927121      2000
+
+In [13]:
+#xgboost
+from xgboost import XGBClassifier
+extreme = XGBClassifier(random_state=1)
+extreme.fit(normalized_train_df, y_train)
+extreme_pred = extreme.predict(normalized_test_df)
+In [14]:
+#Classification
+print(classification_report(y_test, extreme_pred, digits=4))
+              precision    recall  f1-score   support
+
+      stable     0.9206    0.8469    0.8822       712
+    unstable     0.9190    0.9596    0.9389      1288
+
+    accuracy                         0.9195      2000
+   macro avg     0.9198    0.9033    0.9105      2000
+weighted avg     0.9195    0.9195    0.9187      2000
+
+In [15]:
+#lightgbm
+from lightgbm import LGBMClassifier
+light = LGBMClassifier(random_state=1)
+light.fit(normalized_train_df, y_train)
+light_pred = light.predict(normalized_test_df)
+In [16]:
+#Classification
+print(classification_report(y_test, light_pred, digits=4))
+              precision    recall  f1-score   support
+
+      stable     0.9297    0.8919    0.9104       712
+    unstable     0.9415    0.9627    0.9520      1288
+
+    accuracy                         0.9375      2000
+   macro avg     0.9356    0.9273    0.9312      2000
+weighted avg     0.9373    0.9375    0.9372      2000
+
+In [17]:
+#Hyperparameters
+
+n_estimators = [50, 100, 300, 500, 1000]
+min_samples_split = [2, 3, 5, 7, 9]
+min_samples_leaf = [1, 2, 4, 6, 8]
+max_features = ['auto', 'sqrt', 'log2', None] 
+hyperparameter_grid = {'n_estimators': n_estimators,
+                       'min_samples_leaf': min_samples_leaf,
+                       'min_samples_split': min_samples_split,
+                       'max_features': max_features}
+In [20]:
+#Randomised Search Cross Validation
+from sklearn.model_selection import RandomizedSearchCV
+from sklearn.ensemble import ExtraTreesClassifier
+
+tree2 = ExtraTreesClassifier(random_state=1)
+clf = RandomizedSearchCV(tree2, hyperparameter_grid, cv=5, n_iter=10, scoring = 'accuracy', n_jobs = -1, verbose = 1, random_state=1)
+search_result = clf.fit(normalized_train_df, y_train)
+Fitting 5 folds for each of 10 candidates, totalling 50 fits
+[Parallel(n_jobs=-1)]: Using backend LokyBackend with 2 concurrent workers.
+[Parallel(n_jobs=-1)]: Done  46 tasks      | elapsed:  1.3min
+[Parallel(n_jobs=-1)]: Done  50 out of  50 | elapsed:  1.4min finished
+In [21]:
+#checking for the best parameter for the model
+search_result.best_params_
+Out[21]:
+{'max_features': None,
+ 'min_samples_leaf': 8,
+ 'min_samples_split': 2,
+ 'n_estimators': 1000}
+In [24]:
+#experimenting with this parameter to test the model's performance
+tuned_tree = ExtraTreesClassifier(n_estimators=1000, min_samples_split=2, 
+                                 min_samples_leaf=8, max_features=None, random_state=1)
+tuned_tree.fit(normalized_train_df, y_train)
+tuned_tree_pred = tuned_tree.predict(normalized_test_df)
+In [26]:
+#classification report for this hyperparameter tuning
+print(classification_report(y_test, tuned_tree_pred, digits=4))
+              precision    recall  f1-score   support
+
+      stable     0.9211    0.8694    0.8945       712
+    unstable     0.9300    0.9589    0.9442      1288
+
+    accuracy                         0.9270      2000
+   macro avg     0.9256    0.9141    0.9193      2000
+weighted avg     0.9268    0.9270    0.9265      2000
+
+In [27]:
+#plot graph of feature importance
+feat_importance = pd.Series(tuned_tree.feature_importances_, index=X.columns)
+feat_importance.nlargest(10).plot(kind='barh')
+plt.show()
